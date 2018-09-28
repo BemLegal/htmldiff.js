@@ -704,7 +704,8 @@
                             match.startInBefore - 1 : null),
                     startInAfter: positionInAfter,
                     endInAfter: (actionUpToMatchPositions !== 'delete' ?
-                            match.startInAfter - 1 : null)
+                            match.startInAfter - 1 : null),
+                    cindex: index
                 });
             }
             if (match.length !== 0){
@@ -713,7 +714,8 @@
                     startInBefore: match.startInBefore,
                     endInBefore: match.endInBefore,
                     startInAfter: match.startInAfter,
-                    endInAfter: match.endInAfter
+                    endInAfter: match.endInAfter,
+                    cindex: 0
                 });
             }
             positionInBefore = match.endInBefore + 1;
@@ -836,10 +838,10 @@
      * @param {string} dataPrefix (Optional) The prefix to use in data attributes.
      * @param {string} className (Optional) The class name to include in the wrapper tag.
      */
-    function wrap(tag, content, opIndex, dataPrefix, className){
+    function wrap(tag, content, opIndex, dataPrefix, className, cindex){
         var wrapper = new TokenWrapper(content);
         dataPrefix = dataPrefix ? dataPrefix + '-' : '';
-        var attrs = ' data-' + dataPrefix + 'operation-index="' + opIndex + '"';
+        var attrs = ' data-' + dataPrefix + 'operation-index="' + cindex + '"';
         if (className){
             attrs += ' class="' + className + '"';
         }
@@ -856,7 +858,7 @@
             return '';
         }, function(openingTag){
             var dataAttrs = ' data-diff-node="' + tag + '"';
-            dataAttrs += ' data-' + dataPrefix + 'operation-index="' + opIndex + '"';
+            dataAttrs += ' data-' + dataPrefix + 'operation-index="' + cindex + '"';
 
             return openingTag.replace(/>\s*$/, dataAttrs + '$&');
         });
@@ -883,28 +885,96 @@
      * @return {string} The rendering of that operation.
      */
     var OPS = {
-        'equal': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
-            var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+        'equal': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className, cindex, ViewType){
+            
+            switch(ViewType){
+                case "SIDEBYSIDE-before":
+                    var tokens = beforeTokens.slice(op.startInBefore, op.endInBefore + 1);
+                    break;
+                case "SIDEBYSIDE-after":
+                    var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+                    break;
+                default: 
+                    var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+            }           
             return tokens.reduce(function(prev, curr){
                 return prev + curr.string;
             }, '');
         },
-        'insert': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
-            var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
-            var val = tokens.map(function(token){
-                return token.string;
-            });
-            return wrap('ins', val, opIndex, dataPrefix, className);
+        'insert': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className,cindex, ViewType){
+            switch(ViewType){
+                case "SIDEBYSIDE-before":
+                    var tokens = null;
+                    break;
+                case "SIDEBYSIDE-after":
+                    var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+                    break;
+                default: 
+                    var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+            }  
+            if (tokens){               
+                var val = tokens.map(function(token){
+                    return token.string;
+                });
+                return wrap('ins', val, opIndex, dataPrefix, className, cindex);
+            }
+            else{
+                return "";
+            }
         },
-        'delete': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
-            var tokens = beforeTokens.slice(op.startInBefore, op.endInBefore + 1);
-            var val = tokens.map(function(token){
-                return token.string;
-            });
-            return wrap('del', val, opIndex, dataPrefix, className);
+        'delete': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className, cindex, ViewType){
+            switch(ViewType){
+                case "SIDEBYSIDE-before":
+                    var tokens = beforeTokens.slice(op.startInBefore, op.endInBefore + 1);
+                    break;
+                case "SIDEBYSIDE-after":
+                    var tokens = null;
+                    break;
+                default: 
+                var tokens = beforeTokens.slice(op.startInBefore, op.endInBefore + 1);
+            }
+            if (tokens){      
+                var val = tokens.map(function(token){
+                    return token.string;
+                });
+                return wrap('del', val, opIndex, dataPrefix, className, cindex);
+            }
+            else{
+                return "";
+            }
         },
-        'replace': function(){
-            return OPS['delete'].apply(null, arguments) + OPS['insert'].apply(null, arguments);
+        'replace': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className, cindex, ViewType){
+            var chunkval = "";
+            switch(ViewType){
+                case "SIDEBYSIDE-before":
+                    var tokens = beforeTokens.slice(op.startInBefore, op.endInBefore + 1);
+                    var val = tokens.map(function(token){
+                        return token.string;
+                    });
+                    chunkval = wrap('del', val, opIndex, dataPrefix, className + " replace", cindex);
+                    break;
+                case "SIDEBYSIDE-after":
+                    var tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+                    var val = tokens.map(function(token){
+                        return token.string;
+                    });
+                    chunkval = wrap('ins', val, opIndex, dataPrefix, className + " replace", cindex);
+                    break;
+                default: 
+                    var tokens = beforeTokens.slice(op.startInBefore, op.endInBefore + 1);
+                    var val = tokens.map(function(token){
+                        return token.string;
+                    });
+                    chunkval = wrap('del', val, opIndex, dataPrefix, className + " replace", cindex);
+                    tokens = afterTokens.slice(op.startInAfter, op.endInAfter + 1);
+                    val = tokens.map(function(token){
+                        return token.string;
+                    });
+                    chunkval += wrap('ins', val, opIndex, dataPrefix, className + " replace", cindex);
+            }               
+                      
+            return chunkval;
+            //return OPS['delete'].apply(null, arguments) + OPS['insert'].apply(null, arguments);
         }
     };
 
@@ -927,10 +997,10 @@
      *
      * @return {string} The rendering of the list of operations.
      */
-    function renderOperations(beforeTokens, afterTokens, operations, dataPrefix, className){
+    function renderOperations(beforeTokens, afterTokens, operations, dataPrefix, className, ViewType){
         return operations.reduce(function(rendering, op, index){
             return rendering + OPS[op.action](
-                    op, beforeTokens, afterTokens, index, dataPrefix, className);
+                    op, beforeTokens, afterTokens, index, dataPrefix, className, op.cindex, ViewType);
         }, '');
     }
 
@@ -949,8 +1019,15 @@
      *
      * @return {string} The combined HTML content with differences wrapped in <ins> and <del> tags.
      */
-    function diff(before, after, className, dataPrefix, atomicTags){
-        if (before === after) return before;
+    function diff(before, after, className, dataPrefix, atomicTags, ViewType){
+        if (before === after){
+            if (ViewType.toUpperCase() === "SIDEBYSIDE"){
+                return [before, after];
+            } 
+            else {
+                retur [after,""]
+            }
+        } 
 
         // Enable user provided atomic tag list.
         atomicTags ? 
@@ -960,7 +1037,12 @@
         before = htmlToTokens(before);
         after = htmlToTokens(after);
         var ops = calculateOperations(before, after);
-        return renderOperations(before, after, ops, dataPrefix, className);
+        if (ViewType.toUpperCase() === "SIDEBYSIDE"){
+          return [renderOperations(before, after, ops, dataPrefix, className, ViewType.toUpperCase() + "-before"),renderOperations(before, after, ops, dataPrefix, className, ViewType.toUpperCase() + "-after")];
+        } 
+        else {
+          return [renderOperations(before, after, ops, dataPrefix, className, "linear"),""];
+        }
     }
 
     diff.htmlToTokens = htmlToTokens;

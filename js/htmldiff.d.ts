@@ -16,5 +16,5 @@
  *
  * @return {string} The combined HTML content with differences wrapped in `<ins>` and `<del>` tags.
  */
-declare function diff(before: string, after: string, className?: string | null, dataPrefix?: string | null, atomicTags?: string | null): string;
+declare function diff(before: string, after: string, className?: string | null, dataPrefix?: string | null, atomicTags?: string | null, ViewType:? string | null): string[];
 export = diff;
